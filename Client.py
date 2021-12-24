@@ -54,6 +54,8 @@ class Client:
             print(welcome_message)
             answer = sys.stdin.read(1)
             tcp_socket.sendall(answer.encode())
+            summary_message = tcp_socket.recv(1024).decode()
+            print(summary_message)
 
     def run(self):
         print("Client started, listening for offer requests...")
@@ -61,3 +63,4 @@ class Client:
             self.open_udp_socket()
             server_address, server_port = self.get_server_broadcast()
             self.connect_server(server_address, server_port)
+            print("Server disconnected, listening for offer requests...")
