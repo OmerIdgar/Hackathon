@@ -2,7 +2,7 @@ from socket import *
 from struct import *
 import sys
 import time
-from scapy import get_if_addr
+from scapy.all import get_if_addr
 from threading import Thread, Lock
 from random import randint, choice
 
@@ -63,21 +63,13 @@ class Server:
             sys.exit(1)
 
     def close_tcp_socket(self):
+        self.connected = False
         self.tcp_sock.close()
 
     def send_offers(self, offer):
         while self.total_clients < MAX_CONNECTIONS:
             self.udp_sock.sendto(offer, (IP_BROADCAST, self.send_port))
-            time.sleep(1000)
-
-    # def handle_new_client(self, client_socket, addr):
-    #     while True:
-    #         msg = client_socket.recv(1024)
-    #         # do some checks and if msg == someWeirdSignal: break:
-    #         print(addr, ' >> ', msg)
-    #         msg = raw_input('SERVER >> ')
-    #         client_socket.send(msg)
-    #     client_socket.close()
+            time.sleep(1)
 
     def generate_equation(self):
         op = choice(["+", "-"])
@@ -93,12 +85,23 @@ class Server:
 
     def start_game(self, client_socket, team_name, welcome_message):
         client_socket.sendall(welcome_message.encode())
-        client_answer = client_socket.recv(1024).decode()
-        with self.mutex:
-            if self.answer != -1:
-                self.answer = client_answer
-                self.responder = team_name
+        client_socket.settimeout(10)
+        try:
+            client_answer = client_socket.recv(1024).decode()
+            with self.mutex:
+                if self.answer != -1:
+                    self.answer = client_answer
+                    self.responder = team_name
+        except error:
+            print("Passed 10 seconds, skipping...")
 
+    def handle_timeout(self, client1, client2):
+        client1.settimeout(10)
+        client2.settimeout(10)
+
+    def restore_timeout(self, client1, client2):
+        client1.settimeout(None)
+        client2.settimeout(None)
 
     def listen_to_two_players(self):
         self.open_tcp_socket()
@@ -107,10 +110,13 @@ class Server:
         self.total_clients += 1
         second_client_socket, second_client_address = self.tcp_sock.accept()
         self.total_clients += 1
-        time.sleep(10000)
+        time.sleep(10)
 
+        self.handle_timeout(first_client_socket, second_client_socket)
         first_team_name = first_client_socket.recv(1024).decode()
         second_team_name = second_client_socket.recv(1024).decode()
+        self.restore_timeout(first_client_socket, second_client_socket)
+
         a, op, b, answer = self.generate_equation()
         welcome_message = f"Welcome to Quick Maths.\n" \
                           f"Player 1: {first_team_name}\n" \
@@ -119,9 +125,9 @@ class Server:
                           f"Please answer the following question as fast as you can:\n" \
                           f"How much is {a}{op}{b}?"
 
-        thread_client_1 = Thread(target=self.start_game, name='Thread_Offers', args=(first_client_socket, first_team_name, welcome_message))
+        thread_client_1 = Thread(target=self.start_game, name='Thread1_game', args=(first_client_socket, first_team_name, welcome_message))
         thread_client_1.start()
-        thread_client_2 = Thread(target=self.start_game, name='Thread_Offers', args=(second_client_socket, second_team_name, welcome_message))
+        thread_client_2 = Thread(target=self.start_game, name='Thread2_game', args=(second_client_socket, second_team_name, welcome_message))
         thread_client_2.start()
 
         thread_client_1.join()
@@ -144,7 +150,6 @@ class Server:
     def run(self):
         print(f"Server started, listening on IP address {self.ip}")
         self.open_udp_socket()
-        # self.sock.settimeout(0.2)
         offer = pack('IcH', self.magic_cookie, self.message_type, self.port)
         while True:
             offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=offer)
