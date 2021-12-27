@@ -125,9 +125,11 @@ class Server:
                           f"Please answer the following question as fast as you can:\n" \
                           f"How much is {a}{op}{b}?"
 
-        thread_client_1 = Thread(target=self.start_game, name='Thread1_game', args=(first_client_socket, first_team_name, welcome_message))
+        thread_client_1 = Thread(target=self.start_game, name='Thread1_game',
+                                 args=(first_client_socket, first_team_name, welcome_message))
         thread_client_1.start()
-        thread_client_2 = Thread(target=self.start_game, name='Thread2_game', args=(second_client_socket, second_team_name, welcome_message))
+        thread_client_2 = Thread(target=self.start_game, name='Thread2_game',
+                                 args=(second_client_socket, second_team_name, welcome_message))
         thread_client_2.start()
 
         thread_client_1.join()
@@ -135,6 +137,7 @@ class Server:
 
         summary_message = f"Game Over!\n" \
                           f"The correct answer was {answer}!\n\n"
+
         if self.answer == -1:
             summary_message += "The game ended with a Draw!"
         elif self.answer == answer:
@@ -155,3 +158,8 @@ class Server:
             offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=offer)
             offer_thread.start()
             self.listen_to_two_players()
+
+
+if __name__ == '__main__':
+    server = Server("omer_guy", 12345, 0xabcddcba, 0x2, 14000)
+    server.run()

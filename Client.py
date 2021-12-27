@@ -110,3 +110,8 @@ class Client:
             self.close_socket()
             self.connect_server(server_address, server_port)
             print("Server disconnected, listening for offer requests...")
+
+
+if __name__ == '__main__':
+    client = Client("omer_guy", 14000, 0xabcddcba, 0x2)
+    client.run()
