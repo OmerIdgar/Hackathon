@@ -12,16 +12,13 @@ IP_BROADCAST = "255.255.255.255"
 
 
 class Server:
-    def __init__(self, team_name, port, magic_cookie, message_type, send_port):
+    def __init__(self, team_name, port, magic_cookie, message_type, destination_port):
         self.team_name = team_name
         self.port = port
         self.ip = get_if_addr("eth1")
         self.magic_cookie = magic_cookie
         self.message_type = message_type
-        self.send_port = send_port
-        self.address = (self.ip, self.port)
-        self.connected = False
-        self.clients = []
+        self.destination_port = destination_port
         self.total_clients = 0
         self.udp_sock = None
         self.tcp_sock = None
@@ -29,46 +26,34 @@ class Server:
         self.answer = -1
         self.responder = None
 
-    # def send_to_all_clients(self, msg):
-    #     for client in self.clients:
-    #         client.connection.send(msg)
-    #
-    # def send_to_client(self, ip, port, msg):
-    #     for client in self.clients:
-    #         if client.ip == ip and client.port == port:
-    #             client.connection.send(msg)
-
     def open_udp_socket(self):
         try:
             self.udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
             self.udp_sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
             self.udp_sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
             self.udp_sock.bind(("", self.port))
-            self.connected = True
         except error:
-            self.connected = False
-            if self.udp_sock:
-                self.udp_sock.close()
-            sys.exit(1)
+            self.close_socket(self.udp_sock)
+            # sys.exit(1)
 
     def open_tcp_socket(self):
         try:
             self.tcp_sock = socket(AF_INET, SOCK_STREAM)
             self.tcp_sock.bind(("", self.port))
-            self.connected = True
         except error:
-            self.connected = False
-            if self.tcp_sock:
-                self.tcp_sock.close()
-            sys.exit(1)
+            self.close_socket(self.tcp_sock)
+            # sys.exit(1)
 
-    def close_tcp_socket(self):
-        self.connected = False
-        self.tcp_sock.close()
+    def close_socket(self, sock):
+        """
+        Close given socket of the client
+        """
+        if sock:
+            sock.close()
 
     def send_offers(self, offer):
         while self.total_clients < MAX_CONNECTIONS:
-            self.udp_sock.sendto(offer, (IP_BROADCAST, self.send_port))
+            self.udp_sock.sendto(offer, (IP_BROADCAST, self.destination_port))
             time.sleep(1)
 
     def generate_equation(self):
@@ -106,6 +91,23 @@ class Server:
     def listen_to_two_players(self):
         self.open_tcp_socket()
         self.tcp_sock.listen(MAX_CONNECTIONS)
+        while self.total_clients < 2:
+            client_socket, client_address = self.tcp_sock.accept()
+            try:
+                team_name = client_socket.recv(BUFFER_SIZE).decode()
+            except Exception:
+                pass
+
+        first_client_socket, first_client_address = self.tcp_sock.accept()
+        self.total_clients += 1
+        second_client_socket, second_client_address = self.tcp_sock.accept()
+        self.total_clients += 1
+        time.sleep(10)
+
+
+    def listen_to_two_players(self):
+        self.open_tcp_socket()
+        self.tcp_sock.listen(MAX_CONNECTIONS)
         first_client_socket, first_client_address = self.tcp_sock.accept()
         self.total_clients += 1
         second_client_socket, second_client_address = self.tcp_sock.accept()
@@ -127,9 +129,9 @@ class Server:
 
         thread_client_1 = Thread(target=self.start_game, name='Thread1_game',
                                  args=(first_client_socket, first_team_name, welcome_message))
-        thread_client_1.start()
         thread_client_2 = Thread(target=self.start_game, name='Thread2_game',
                                  args=(second_client_socket, second_team_name, welcome_message))
+        thread_client_1.start()
         thread_client_2.start()
 
         thread_client_1.join()
@@ -153,13 +155,14 @@ class Server:
     def run(self):
         print(f"Server started, listening on IP address {self.ip}")
         self.open_udp_socket()
-        offer = pack('IcH', self.magic_cookie, self.message_type, self.port)
+        offer = pack('IbH', self.magic_cookie, self.message_type, self.port)
         while True:
-            offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=offer)
+            offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=(offer,))
             offer_thread.start()
             self.listen_to_two_players()
 
 
 if __name__ == '__main__':
-    server = Server("omer_guy", 12345, 0xabcddcba, 0x2, 14000)
+    server = Server(team_name="omer_guy", port=12345, magic_cookie=0xabcddcba,
+                    message_type=0x2, destination_port=14000)
     server.run()

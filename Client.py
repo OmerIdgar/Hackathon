@@ -20,8 +20,6 @@ class Client:
         client's unique value
     message_type
         client's unique value
-    connected : boolean
-        represent whether the client is connected to udp socket
     sock : socket
         represent the udp socket of the client
     """
@@ -31,31 +29,37 @@ class Client:
         self.port = port
         self.magic_cookie = magic_cookie
         self.message_type = message_type
-        self.connected = False
-        self.sock = None
+        self.udp_sock = None
+        self.tcp_sock = None
 
     def open_udp_socket(self):
         """
         Open a udp socket for the client
         """
         try:
-            self.sock = socket(AF_INET, SOCK_DGRAM)
-            self.sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
-            # sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-            self.sock.bind(("", self.port))
-            self.connected = True
+            self.udp_sock = socket(AF_INET, SOCK_DGRAM)
+            self.udp_sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
+            self.udp_sock.bind(("", self.port))
         except error:
-            self.connected = False
-            if self.sock:
-                self.close_socket()
-            sys.exit(1)
+            self.close_socket(self.udp_sock)
+            # sys.exit(1)
 
-    def close_socket(self):
+    def open_tcp_socket(self):
         """
-        Close the udp socket of the client
+        Open a tcp socket for the client
         """
-        self.connected = False
-        self.sock.close()
+        try:
+            self.tcp_sock = socket(AF_INET, SOCK_DGRAM)
+            self.tcp_sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
+        except error:
+            self.close_socket(self.tcp_sock)
+
+    def close_socket(self, sock):
+        """
+        Close given socket of the client
+        """
+        if sock:
+            sock.close()
 
     def is_valid_packet(self, magic_cookie, message_type):
         """
@@ -74,13 +78,18 @@ class Client:
         If received correct message then validate its message and save the server properties
         :return: the server's address and port from valid server
         """
-        while self.connected:
-            data, server_address = socket.recvfrom(BUFFER_SIZE)
-            magic_cookie, message_type, server_port = unpack('IcH', data)
+        while True:
+            data, server_address = self.udp_sock.recvfrom(BUFFER_SIZE)
+            print(f'data: {data}')
+            server_host = server_address[0]
+            try:
+                magic_cookie, message_type, server_port = unpack('IbH', data)
+            except Exception:
+                continue
             if not self.is_valid_packet(magic_cookie, message_type):
                 continue
-            print(f"Received offer from {server_address}, attempting to connect...")
-            return server_address, server_port
+            print(f"Received offer from {server_host}, attempting to connect...")
+            return server_host, server_port
 
     def connect_server(self, server_address, server_port):
         """
@@ -88,16 +97,25 @@ class Client:
         :param server_address: the host's ip address
         :param server_port: the host's port number
         """
-        with socket(AF_INET, SOCK_STREAM) as tcp_socket:
-            tcp_socket.connect((server_address, server_port))
-            send_data = self.team_name + "\n"
-            tcp_socket.sendall(send_data.encode())
-            welcome_message = tcp_socket.recv(1024).decode()
-            print(welcome_message)
-            answer = getch.getch()
-            tcp_socket.sendall(answer.encode())
-            summary_message = tcp_socket.recv(1024).decode()
-            print(summary_message)
+        old_timeout = self.tcp_sock.gettimeout()
+        self.tcp_sock.settimeout(5)
+        try:
+            self.tcp_sock.connect((server_address, server_port))
+        except Exception:
+            self.close_socket(self.tcp_sock)
+            return False
+        self.tcp_sock.settimeout(old_timeout)
+        return True
+
+    def communicate_server(self):
+        send_data = self.team_name + "\n"
+        self.tcp_sock.sendall(send_data.encode())
+        welcome_message = self.tcp_sock.recv(1024).decode()
+        print(welcome_message)
+        answer = getch.getch()
+        self.tcp_sock.sendall(answer.encode())
+        summary_message = self.tcp_sock.recv(1024).decode()
+        print(summary_message)
 
     def run(self):
         """
@@ -107,11 +125,16 @@ class Client:
         while True:
             self.open_udp_socket()
             server_address, server_port = self.get_server_broadcast()
-            self.close_socket()
-            self.connect_server(server_address, server_port)
+            self.close_socket(self.udp_sock)
+            self.open_tcp_socket()
+            connection_succeeded = self.connect_server(server_address, server_port)
+            if connection_succeeded:
+                self.communicate_server()
+            self.close_socket(self.tcp_sock)
             print("Server disconnected, listening for offer requests...")
 
 
 if __name__ == '__main__':
-    client = Client("omer_guy", 14000, 0xabcddcba, 0x2)
+    client = Client(team_name="omer_guy", port=14000, magic_cookie=0xabcddcba,
+                    message_type=0x2)
     client.run()
