@@ -111,16 +111,17 @@ class Server:
         client_socket.settimeout(10)
         try:
             client_answer = client_socket.recv(1024).decode()
-            # with self.mutex:
-            self.mutex.acquire(True)
-            if self.answer != -1:
-                self.answer = client_answer
-                self.responder = team_name
-            self.mutex.release()
-            client_socket.settimeout(old_timeout)
         except Exception:
             print("Passed 10 seconds, skipping...")
             client_socket.settimeout(old_timeout)
+            return
+        # with self.mutex:
+        self.mutex.acquire(True)
+        if self.answer != -1:
+            self.answer = client_answer
+            self.responder = team_name
+        self.mutex.release()
+        client_socket.settimeout(old_timeout)
 
     def start_game(self):
         a, op, b, answer = self.generate_equation()
