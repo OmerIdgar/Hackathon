@@ -2,6 +2,7 @@ from socket import *
 from struct import *
 import sys
 import getch
+from multiprocessing import Process
 
 BUFFER_SIZE = 1024
 
@@ -42,15 +43,15 @@ class Client:
             self.udp_sock.bind(("", self.port))
         except error:
             self.close_socket(self.udp_sock)
-            # sys.exit(1)
 
     def open_tcp_socket(self):
         """
         Open a tcp socket for the client
         """
         try:
-            self.tcp_sock = socket(AF_INET, SOCK_DGRAM)
+            self.tcp_sock = socket(AF_INET, SOCK_STREAM)
             self.tcp_sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
+            self.tcp_sock.bind(("", self.port))
         except error:
             self.close_socket(self.tcp_sock)
 
@@ -80,7 +81,6 @@ class Client:
         """
         while True:
             data, server_address = self.udp_sock.recvfrom(BUFFER_SIZE)
-            print(f'data: {data}')
             server_host = server_address[0]
             try:
                 magic_cookie, message_type, server_port = unpack('IbH', data)
@@ -110,12 +110,26 @@ class Client:
     def communicate_server(self):
         send_data = self.team_name + "\n"
         self.tcp_sock.sendall(send_data.encode())
-        welcome_message = self.tcp_sock.recv(1024).decode()
-        print(welcome_message)
+        old_timeout = self.tcp_sock.gettimeout()
+        self.tcp_sock.settimeout(20)
+        try:
+            welcome_message = self.tcp_sock.recv(1024).decode()
+            print(welcome_message)
+            self.tcp_sock.settimeout(old_timeout)
+        except Exception:
+            pass
+
+    def send_answer(self):
         answer = getch.getch()
         self.tcp_sock.sendall(answer.encode())
-        summary_message = self.tcp_sock.recv(1024).decode()
-        print(summary_message)
+
+    def listen_for_server_answer(self):
+        self.tcp_sock.settimeout(15)
+        try:
+            summary_message = self.tcp_sock.recv(1024).decode()
+            print(summary_message)
+        except Exception:
+            pass
 
     def run(self):
         """
@@ -130,11 +144,15 @@ class Client:
             connection_succeeded = self.connect_server(server_address, server_port)
             if connection_succeeded:
                 self.communicate_server()
+                p_input = Process(target=self.send_answer)
+                p_input.start()
+                self.listen_for_server_answer()
+                p_input.terminate()
             self.close_socket(self.tcp_sock)
             print("Server disconnected, listening for offer requests...")
 
 
 if __name__ == '__main__':
-    client = Client(team_name="omer_guy", port=14000, magic_cookie=0xabcddcba,
+    client = Client(team_name="The Thread Killers", port=13117, magic_cookie=0xabcddcba,
                     message_type=0x2)
     client.run()
