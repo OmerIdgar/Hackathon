@@ -1,10 +1,11 @@
 from socket import *
 from struct import *
-import sys
 import getch
 from multiprocessing import Process
+from Painter import *
 
 BUFFER_SIZE = 1024
+MAX_TIMEOUT = 20
 
 
 class Client:
@@ -43,6 +44,7 @@ class Client:
             self.udp_sock.bind(("", self.port))
         except error:
             self.close_socket(self.udp_sock)
+            print(FAIL_message("Failed to open a UDP socket"))
 
     def open_tcp_socket(self):
         """
@@ -54,8 +56,10 @@ class Client:
             self.tcp_sock.bind(("", self.port))
         except error:
             self.close_socket(self.tcp_sock)
+            print(FAIL_message("Failed to open a TCP socket"))
 
-    def close_socket(self, sock):
+    @staticmethod
+    def close_socket(sock):
         """
         Close given socket of the client
         """
@@ -85,10 +89,12 @@ class Client:
             try:
                 magic_cookie, message_type, server_port = unpack('IbH', data)
             except Exception:
+                print(FAIL_message("Received packet with wrong format"))
                 continue
             if not self.is_valid_packet(magic_cookie, message_type):
+                print(FAIL_message("One of the packet's credentials is not valid, Skipping"))
                 continue
-            print(f"Received offer from {server_host}, attempting to connect...")
+            print(WARNING_message(f"Received offer from {server_host}, attempting to connect..."))
             return server_host, server_port
 
     def connect_server(self, server_address, server_port):
@@ -101,7 +107,8 @@ class Client:
         self.tcp_sock.settimeout(5)
         try:
             self.tcp_sock.connect((server_address, server_port))
-        except Exception:
+            print(OK_message("Connection Succeeded"))
+        except error:
             self.close_socket(self.tcp_sock)
             return False
         self.tcp_sock.settimeout(old_timeout)
@@ -111,12 +118,13 @@ class Client:
         send_data = self.team_name + "\n"
         self.tcp_sock.sendall(send_data.encode())
         old_timeout = self.tcp_sock.gettimeout()
-        self.tcp_sock.settimeout(20)
+        self.tcp_sock.settimeout(MAX_TIMEOUT)
         try:
-            welcome_message = self.tcp_sock.recv(1024).decode()
-            print(welcome_message)
+            welcome_message = self.tcp_sock.recv(BUFFER_SIZE).decode()
+            print(SERVER_message(welcome_message))
             self.tcp_sock.settimeout(old_timeout)
-        except Exception:
+        except error:
+            print(FAIL_message(f"Connection Timeout, received no data for {MAX_TIMEOUT} seconds"))
             pass
 
     def send_answer(self):
@@ -124,18 +132,19 @@ class Client:
         self.tcp_sock.sendall(answer.encode())
 
     def listen_for_server_answer(self):
-        self.tcp_sock.settimeout(15)
+        self.tcp_sock.settimeout(MAX_TIMEOUT)
         try:
-            summary_message = self.tcp_sock.recv(1024).decode()
-            print(summary_message)
+            summary_message = self.tcp_sock.recv(BUFFER_SIZE).decode()
+            print(SERVER_message(summary_message))
         except Exception:
+            print(FAIL_message(f"Connection Timeout, received no data for {MAX_TIMEOUT} seconds"))
             pass
 
     def run(self):
         """
         Start the run of the Client
         """
-        print("Client started, listening for offer requests...")
+        print(OK_message("Client started, listening for offer requests..."))
         while True:
             self.open_udp_socket()
             server_address, server_port = self.get_server_broadcast()
@@ -143,16 +152,16 @@ class Client:
             self.open_tcp_socket()
             connection_succeeded = self.connect_server(server_address, server_port)
             if connection_succeeded:
-                self.communicate_server()
-                p_input = Process(target=self.send_answer)
-                p_input.start()
-                self.listen_for_server_answer()
-                p_input.terminate()
+                if self.communicate_server():
+                    p_input = Process(target=self.send_answer)
+                    p_input.start()
+                    self.listen_for_server_answer()
+                    p_input.terminate()
             self.close_socket(self.tcp_sock)
-            print("Server disconnected, listening for offer requests...")
+            print(FAIL_message("Server disconnected, listening for offer requests..."))
 
 
 if __name__ == '__main__':
-    client = Client(team_name="The Thread Killers", port=13117, magic_cookie=0xabcddcba,
+    client = Client(team_name="THE THREAD KILLERS", port=13117, magic_cookie=0xabcddcba,
                     message_type=0x2)
     client.run()

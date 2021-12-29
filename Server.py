@@ -1,6 +1,5 @@
 from socket import *
 from struct import *
-import sys
 import time
 from scapy.all import get_if_addr
 from threading import Thread, Lock
@@ -155,6 +154,7 @@ class Server:
         self.open_udp_socket()
         offer = pack('IbH', self.magic_cookie, self.message_type, self.port)
         while True:
+
             offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=(offer,))
             offer_thread.start()
             self.listen_to_two_players()
