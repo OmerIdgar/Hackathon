@@ -106,12 +106,16 @@ class Client:
         old_timeout = self.tcp_sock.gettimeout()
         self.tcp_sock.settimeout(5)
         try:
-            self.tcp_sock.connect((server_address, server_port))
-            print(OK_message("Connection Succeeded"))
-        except error:
-            self.close_socket(self.tcp_sock)
+            try:
+                self.tcp_sock.connect((server_address, server_port))
+                print(OK_message("Connection Succeeded"))
+                self.tcp_sock.settimeout(old_timeout)
+            except error:
+                self.tcp_sock.settimeout(old_timeout)
+                self.close_socket(self.tcp_sock)
+                return False
+        except Exception:
             return False
-        self.tcp_sock.settimeout(old_timeout)
         return True
 
     def communicate_server(self):
@@ -120,12 +124,17 @@ class Client:
         old_timeout = self.tcp_sock.gettimeout()
         self.tcp_sock.settimeout(MAX_TIMEOUT)
         try:
-            welcome_message = self.tcp_sock.recv(BUFFER_SIZE).decode()
-            print(SERVER_message(welcome_message))
-            self.tcp_sock.settimeout(old_timeout)
-        except error:
-            print(FAIL_message(f"Connection Timeout, received no data for {MAX_TIMEOUT} seconds"))
-            pass
+            try:
+                welcome_message = self.tcp_sock.recv(BUFFER_SIZE).decode()
+                print(SERVER_message(welcome_message))
+                self.tcp_sock.settimeout(old_timeout)
+            except error:
+                self.tcp_sock.settimeout(old_timeout)
+                print(FAIL_message(f"Connection Timeout, received no data for {MAX_TIMEOUT} seconds"))
+                return False
+        except Exception:
+            return False
+        return True
 
     def send_answer(self):
         answer = getch.getch()
@@ -158,10 +167,10 @@ class Client:
                     self.listen_for_server_answer()
                     p_input.terminate()
             self.close_socket(self.tcp_sock)
-            print(FAIL_message("Server disconnected, listening for offer requests..."))
+            print(FAIL_message("Server disconnected, listening for offer requests...\n"))
 
 
 if __name__ == '__main__':
-    client = Client(team_name="THE THREAD KILLERS", port=13117, magic_cookie=0xabcddcba,
+    client = Client(team_name="THE THREAD KILLERS", port=14000, magic_cookie=0xabcddcba,
                     message_type=0x2)
     client.run()

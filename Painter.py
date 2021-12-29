@@ -26,12 +26,13 @@ def FAIL_message(string):
 
 
 def SERVER_message(string):
-    ques_list = string.split("\\n")
+    return string
+    ques_list = string.split("\n")
     if len(ques_list) > 1:
-        for i in range(len(ques_list)-1):
+        for i in range(len(ques_list) - 1):
             ques_list[i] = f"{Painter.WELCOME}{Style.BRIGHT}{string}{Style.RESET}"
         ques_list[-1] = f"{Painter.QUESTION}{Style.BRIGHT}{string}{Style.RESET}"
     else:
         for i in range(len(ques_list)):
             ques_list[i] = f"{Painter.WELCOME}{Style.BRIGHT}{string}{Style.RESET}"
-    return "\\n".join(ques_list)
+    return "\n".join(ques_list)
