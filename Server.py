@@ -35,7 +35,7 @@ class Server:
             self.udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
             self.udp_sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
             self.udp_sock.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-            self.udp_sock.bind(("", self.udp_port))
+            self.udp_sock.bind(('', self.udp_port))
         except error:
             self.close_socket(self.udp_sock)
             print(FAIL_message("Failed to open a UDP socket"))
@@ -44,7 +44,7 @@ class Server:
         try:
             self.tcp_sock = socket(AF_INET, SOCK_STREAM)
             self.tcp_sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
-            self.tcp_sock.bind(("", self.tcp_port))
+            self.tcp_sock.bind(('', self.tcp_port))
         except error:
             self.close_socket(self.tcp_sock)
             print(FAIL_message("Failed to open a TCP socket"))
@@ -73,7 +73,7 @@ class Server:
         """
         Generate an Equation
         """
-        op = choice(["+", "-"])
+        op = choice(["+", "-", "*"])
         if op == "+":
             a = randint(0, 9)
             b = randint(0, 9 - a)
@@ -82,6 +82,19 @@ class Server:
             a = randint(0, 100)
             b = randint(max(a - 10 + 1, 0), a)
             answer = a - b
+        if op == "*":
+            a = randint(0,4)
+            if a == 0:
+                b = randint(0, 100)
+            elif a == 1:
+                b = randint(1,9)
+            elif a == 2:
+                b = randint(1,4)
+            elif a == 3:
+                b = randint(1,3)
+            elif a == 4:
+                b = randint(1,2)
+            answer = a * b
         return a, op, b, str(answer)
 
 
@@ -195,5 +208,5 @@ class Server:
 
 if __name__ == '__main__':
     server = Server(team_name="THE THREAD KILLERS", udp_port=12345, tcp_port=11111, magic_cookie=0xabcddcba,
-                    message_type=0x2, destination_port=13117)
+                    message_type=0x2, destination_port=1337)
     server.run()

@@ -182,6 +182,6 @@ class Client:
 
 
 if __name__ == '__main__':
-    client = Client(team_name="THE THREAD KILLERS", port=13117, magic_cookie=0xabcddcba,
+    client = Client(team_name="THE THREAD KILLERS", port=1337, magic_cookie=0xabcddcba,
                     message_type=0x2)
     client.run()
