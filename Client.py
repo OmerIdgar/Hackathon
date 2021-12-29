@@ -22,8 +22,10 @@ class Client:
         client's unique value
     message_type
         client's unique value
-    sock : socket
+    udp_sock : socket
         represent the udp socket of the client
+    tcp_sock : socket
+        represent the tcp socket of the client
     """
 
     def __init__(self, team_name, port, magic_cookie, message_type):
@@ -119,6 +121,9 @@ class Client:
         return True
 
     def communicate_server(self):
+        """
+        Send the server his team name and receive welcome message
+        """
         send_data = self.team_name + "\n"
         self.tcp_sock.sendall(send_data.encode())
         old_timeout = self.tcp_sock.gettimeout()
@@ -137,10 +142,16 @@ class Client:
         return True
 
     def send_answer(self):
+        """
+        Wait for an input from the client
+        """
         answer = getch.getch()
         self.tcp_sock.sendall(answer.encode())
 
     def listen_for_server_answer(self):
+        """
+        Wait for server summary message
+        """
         self.tcp_sock.settimeout(MAX_TIMEOUT)
         try:
             summary_message = self.tcp_sock.recv(BUFFER_SIZE).decode()

@@ -5,6 +5,7 @@ from scapy.all import get_if_addr
 from threading import Thread, Lock
 from random import randint, choice
 from Painter import *
+from select import select
 
 BUFFER_SIZE = 1024
 MAX_CONNECTIONS = 2
@@ -37,7 +38,7 @@ class Server:
             self.udp_sock.bind(("", self.udp_port))
         except error:
             self.close_socket(self.udp_sock)
-            print("Can't set UDP Socket.")
+            print(FAIL_message("Failed to open a UDP socket"))
 
     def open_tcp_socket(self):
         try:
@@ -46,7 +47,7 @@ class Server:
             self.tcp_sock.bind(("", self.tcp_port))
         except error:
             self.close_socket(self.tcp_sock)
-            print("Can't set TCP Socket.")
+            print(FAIL_message("Failed to open a TCP socket"))
 
     def close_socket(self, sock):
         """
@@ -56,13 +57,22 @@ class Server:
             sock.close()
 
     def send_offers(self, offer):
+        """
+        Send offers using broadcast
+        :param offer: The offer packet
+        """
         self.open_udp_socket()
         while self.total_clients < MAX_CONNECTIONS:
             self.udp_sock.sendto(offer, (IP_BROADCAST, self.destination_port))
             time.sleep(1)
         self.close_socket(self.udp_sock)
 
-    def generate_equation(self):
+
+    @staticmethod
+    def generate_equation():
+        """
+        Generate an Equation
+        """
         op = choice(["+", "-"])
         if op == "+":
             a = randint(0, 9)
@@ -76,13 +86,16 @@ class Server:
 
 
     def is_valid_client(self, client):
+        """
+        Check whether the client sent his team name and add save his credentials
+        :param client: client socket and address
+        """
         client_socket, client_address = client
         old_timeout = client_socket.gettimeout()
         client_socket.settimeout(10)
         try:
             team_name = client_socket.recv(BUFFER_SIZE).decode()
-            self.mutex.acquire(1)
-            # with self.mutex:
+            self.mutex.acquire(True)
             if self.first_client is None:
                 self.first_client = (client, team_name)
             elif self.second_client is None:
@@ -92,11 +105,14 @@ class Server:
             self.mutex.release()
             client_socket.settimeout(old_timeout)
         except Exception:
-            print("")
+            print(FAIL_message("Client did not send his team name"))
             client_socket.settimeout(old_timeout)
             self.close_socket(client_socket)
 
     def listen_to_two_players(self):
+        """
+        Listen on tcp socket until two clients has connected
+        """
         self.tcp_sock.listen() # MAX_CONNECTIONS
         while self.total_clients < MAX_CONNECTIONS:
             client = self.tcp_sock.accept()
@@ -105,25 +121,10 @@ class Server:
             self.is_valid_client(client)
         self.close_socket(self.udp_sock)
 
-    def handle_client_game(self, client_socket, team_name, welcome_message):
-        client_socket.sendall(welcome_message.encode())
-        old_timeout = client_socket.gettimeout()
-        client_socket.settimeout(10)
-        try:
-            client_answer = client_socket.recv(1024).decode()
-        except Exception:
-            print("Passed 10 seconds, skipping...")
-            client_socket.settimeout(old_timeout)
-            return
-        # with self.mutex:
-        self.mutex.acquire(True)
-        if self.answer != -1:
-            self.answer = client_answer
-            self.responder = team_name
-        self.mutex.release()
-        client_socket.settimeout(old_timeout)
-
     def start_game(self):
+        """
+        Run the game for both clients
+        """
         a, op, b, answer = self.generate_equation()
         (first_client_socket, first_client_address), first_team_name = self.first_client
         (second_client_socket, second_client_address), second_team_name = self.second_client
@@ -134,15 +135,22 @@ class Server:
                           f"Please answer the following question as fast as you can:\n" \
                           f"How much is {a}{op}{b}?"
 
-        thread_client_1 = Thread(target=self.handle_client_game, name='Thread1_game',
-                                 args=(first_client_socket, first_team_name, welcome_message))
-        thread_client_2 = Thread(target=self.handle_client_game, name='Thread2_game',
-                                 args=(second_client_socket, second_team_name, welcome_message))
-        thread_client_1.start()
-        thread_client_2.start()
+        clients = [first_client_socket, second_client_socket]
+        for sock in clients:
+            sock.sendall(welcome_message.encode())
 
-        thread_client_1.join()
-        thread_client_2.join()
+        answered, writers, errors = select(clients, [], [], 10)
+
+        for sock in answered:
+            sock_answer = sock.recv(BUFFER_SIZE).decode()
+            if sock_answer == answer:
+                if sock == first_client_socket:
+                    self.responder = first_team_name
+                    self.answer = sock_answer
+                elif sock == second_client_socket:
+                    self.responder = second_team_name
+                    self.answer = sock_answer
+                break
 
         summary_message = f"Game Over!\n" \
                           f"The correct answer was {answer}!\n\n"
@@ -154,12 +162,15 @@ class Server:
 
         first_client_socket.sendall(summary_message.encode())
         second_client_socket.sendall(summary_message.encode())
-        print("Game over, sending out offer requests...")
+        print(SERVER_message("Game over, sending out offer requests..."))
         self.close_socket(self.tcp_sock)
         first_client_socket.close()
         second_client_socket.close()
 
     def restore_values(self):
+        """
+        Restore the values of the responders and the clients
+        """
         self.total_clients = 0
         self.first_client = None
         self.second_client = None
@@ -167,19 +178,22 @@ class Server:
         self.responder = None
 
     def run(self):
-        print(f"Server started, listening on IP address {self.ip}")
+        """
+        Start the run of the Client
+        """
+        print(OK_message(f"Server started, listening on IP address {self.ip}"))
         offer = pack('IbH', self.magic_cookie, self.message_type, self.tcp_port)
         while True:
             self.open_tcp_socket()
             offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=(offer,))
             offer_thread.start()
             self.listen_to_two_players()
-            time.sleep(2)
+            time.sleep(5)
             self.start_game()
             self.restore_values()
 
 
 if __name__ == '__main__':
-    server = Server(team_name="omer_guy", udp_port=12345, tcp_port=11111, magic_cookie=0xabcddcba,
-                    message_type=0x2, destination_port=14000)
+    server = Server(team_name="THE THREAD KILLERS", udp_port=12345, tcp_port=11111, magic_cookie=0xabcddcba,
+                    message_type=0x2, destination_port=13117)
     server.run()
