@@ -201,7 +201,7 @@ class Server:
             offer_thread = Thread(target=self.send_offers, name='Thread_Offers', args=(offer,))
             offer_thread.start()
             self.listen_to_two_players()
-            time.sleep(5)
+            time.sleep(10)
             self.start_game()
             self.restore_values()
 
