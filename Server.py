@@ -81,13 +81,15 @@ class Server:
         client_socket.settimeout(10)
         try:
             team_name = client_socket.recv(BUFFER_SIZE).decode()
-            with self.mutex:
-                if self.first_client is None:
-                    self.first_client = (client, team_name)
-                elif self.second_client is None:
-                    self.second_client = (client, team_name)
-                self.total_clients += 1
-                print(SERVER_message(f"New Client Connected: {team_name}"))
+            self.mutex.acquire(1)
+            # with self.mutex:
+            if self.first_client is None:
+                self.first_client = (client, team_name)
+            elif self.second_client is None:
+                self.second_client = (client, team_name)
+            self.total_clients += 1
+            print(SERVER_message(f"New Client Connected: {team_name}"))
+            self.mutex.release()
             client_socket.settimeout(old_timeout)
         except Exception:
             print("")
@@ -109,10 +111,12 @@ class Server:
         client_socket.settimeout(10)
         try:
             client_answer = client_socket.recv(1024).decode()
-            with self.mutex:
-                if self.answer != -1:
-                    self.answer = client_answer
-                    self.responder = team_name
+            # with self.mutex:
+            self.mutex.acquire(1)
+            if self.answer != -1:
+                self.answer = client_answer
+                self.responder = team_name
+            self.mutex.release()
             client_socket.settimeout(old_timeout)
         except error:
             print("Passed 10 seconds, skipping...")
